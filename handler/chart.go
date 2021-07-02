@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 
 type responses []model.Response
 
+// httpRequest is a helper for realize and return a http request
 func httpRequest(methond, url string, body io.Reader) (*http.Response, error) {
 	req, err := http.NewRequest(methond, url, body)
 	if err != nil {
@@ -32,6 +34,7 @@ func httpRequest(methond, url string, body io.Reader) (*http.Response, error) {
 	return resp, nil
 }
 
+// CreateChart is a handler that returns a chart in format image
 func CreateChart(c echo.Context) error {
 	currency := c.Param("currency")
 	startDate := c.Param("startdate") + timeZone
@@ -63,7 +66,12 @@ func CreateChart(c echo.Context) error {
 		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
-	dataChart := createDataChart(dataResponse[0])
+	var dataChart string
+	if endDate == "" {
+		dataChart = createDataChart(dataResponse[0])
+	} else {
+		dataChart = createDataChart(dataResponse[0])
+	}
 	chart := htmlChart(dataChart)
 	c.HTML(http.StatusOK, chart)
 	return nil
@@ -71,18 +79,32 @@ func CreateChart(c echo.Context) error {
 
 // createDataChart prepare a string to create the points on the chart
 func createDataChart(resp model.Response) string {
+	/*
+		array that helps create date points to avoid deformation of chart
+	*/
+	parts := [9]int{
+		0,
+		int(math.Round(float64(len(resp.Timestamps)) * 1 / 8)),
+		int(math.Round(float64(len(resp.Timestamps)) * 2 / 8)),
+		int(math.Round(float64(len(resp.Timestamps)) * 3 / 8)),
+		int(math.Round(float64(len(resp.Timestamps)) * 4 / 8)),
+		int(math.Round(float64(len(resp.Timestamps)) * 5 / 8)),
+		int(math.Round(float64(len(resp.Timestamps)) * 6 / 8)),
+		int(math.Round(float64(len(resp.Timestamps)) * 7 / 8)),
+		len(resp.Timestamps) - 1,
+	}
 	dataChartHeaders := "['Fecha', '" + resp.Currency + "'],"
 	var dataChart string
 
 	for i, time := range resp.Timestamps {
-		dataChart += "['" + time.Format("2006-01-02") + "', " + resp.Prices[i] + "],"
+		if containsInt(i, parts[:]) {
+			dataChart += "['" + time.Format("2006-01-02") + "', " + resp.Prices[i] + "],"
+		}
+		dataChart += "['" + time.Format("") + "', " + resp.Prices[i] + "],"
 	}
+
 	dataChart = strings.TrimSuffix(dataChart, ",")
-
 	dataC := strings.Join([]string{dataChartHeaders, dataChart}, "")
-
-	log.Printf("%v", dataC)
-
 	return dataC
 }
 
@@ -120,4 +142,14 @@ func htmlChart(dataChart string) string {
 	</html>
 	`
 	return htmlChart
+}
+
+// containsInt checks if an array contains a specific number
+func containsInt(n int, array []int) bool {
+	for _, v := range array {
+		if v == n {
+			return true
+		}
+	}
+	return false
 }

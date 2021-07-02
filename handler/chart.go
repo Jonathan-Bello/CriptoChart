@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"bytes"
@@ -7,23 +7,14 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
+	"github.com/Jonathan-Bello/CriptoChart/model"
 	"github.com/labstack/echo/v4"
 )
 
-const (
-	key       = "66e4259b729dafe5203f9f885a6464195daab003"
-	urlNomics = "https://api.nomics.com/v1/currencies/sparkline?key=" + key
-)
+// import "github.com/Jonathan-Bello/CriptoChart/model"
 
-func main() {
-	e := echo.New()
-
-	e.GET("/:currency/:startdate", cripto)
-
-	e.Start(":8080")
-}
+type responses []model.Response
 
 func cripto(c echo.Context) error {
 	currency := c.Param("currency")
@@ -64,16 +55,7 @@ func cripto(c echo.Context) error {
 	c.HTML(http.StatusOK, chart)
 	return nil
 }
-
-type responses []response
-
-type response struct {
-	Currency   string      `json:"currency"`
-	Timestamps []time.Time `json:"timestamps"`
-	Prices     []string    `json:"prices"`
-}
-
-func createDataChart(resp response) string {
+func createDataChart(resp model.Response) string {
 	dataChartHeaders := "['Fecha', '" + resp.Currency + "'],"
 	var dataChart string
 

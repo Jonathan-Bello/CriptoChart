@@ -3,35 +3,50 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
 
-	"github.com/Jonathan-Bello/CriptoChart/model"
 	"github.com/labstack/echo/v4"
-)
 
-// import "github.com/Jonathan-Bello/CriptoChart/model"
+	"github.com/Jonathan-Bello/CriptoChart/model"
+)
 
 type responses []model.Response
 
-func cripto(c echo.Context) error {
-	currency := c.Param("currency")
-	startDate := c.Param("startdate")
-
-	url := urlNomics + "&ids=" + currency + "&start=" + startDate
-	log.Print(url)
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func httpRequest(methond, url string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest(methond, url, body)
 	if err != nil {
-		return c.String(http.StatusBadRequest, err.Error())
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	cliente := http.Client{}
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
 
-	resp, err := cliente.Do(req)
+	return resp, nil
+}
+
+func CreateChart(c echo.Context) error {
+	currency := c.Param("currency")
+	startDate := c.Param("startdate") + timeZone
+	endDate := c.Param("enddate")
+
+	var url string
+	if endDate == "" {
+		url = urlNomics + "&ids=" + currency + "&start=" + startDate
+	} else {
+		url = urlNomics + "&ids=" + currency + "&start=" + startDate + "&end=" + endDate + timeZone
+	}
+
+	log.Print(url)
+
+	resp, err := httpRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
@@ -39,7 +54,7 @@ func cripto(c echo.Context) error {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return c.String(http.StatusBadRequest, err.Error())
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	dataResponse := responses{}
@@ -49,12 +64,12 @@ func cripto(c echo.Context) error {
 	}
 
 	dataChart := createDataChart(dataResponse[0])
-	chart := createChart(dataChart)
-
-	// c.JSON(http.StatusOK, z)
+	chart := htmlChart(dataChart)
 	c.HTML(http.StatusOK, chart)
 	return nil
 }
+
+// createDataChart prepare a string to create the points on the chart
 func createDataChart(resp model.Response) string {
 	dataChartHeaders := "['Fecha', '" + resp.Currency + "'],"
 	var dataChart string
@@ -71,7 +86,8 @@ func createDataChart(resp model.Response) string {
 	return dataC
 }
 
-func createChart(dataChart string) string {
+// htmlChart create a HTML struct with the javascript to create the chart picture
+func htmlChart(dataChart string) string {
 	htmlChart := `<html>
 	<head>
 		<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>

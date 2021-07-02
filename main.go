@@ -1,125 +1,30 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"io/ioutil"
-	"log"
 	"net/http"
-	"strings"
-	"time"
+	"os"
 
+	"github.com/Jonathan-Bello/CriptoChart/routes"
 	"github.com/labstack/echo/v4"
-)
-
-const (
-	key       = "66e4259b729dafe5203f9f885a6464195daab003"
-	urlNomics = "https://api.nomics.com/v1/currencies/sparkline?key=" + key
+	"github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	e := echo.New()
+	e.Use(middleware.Recover())
+	e.Use(middleware.Logger())
+	routes.Chart(e)
 
-	e.GET("/:currency/:startdate", cripto)
+	e.GET("/", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{
+			"saludo": "holiwis uwu",
+		})
+	})
 
-	e.Start(":8080")
-}
-
-func cripto(c echo.Context) error {
-	currency := c.Param("currency")
-	startDate := c.Param("startdate")
-
-	url := urlNomics + "&ids=" + currency + "&start=" + startDate
-	log.Print(url)
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return c.String(http.StatusBadRequest, err.Error())
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	cliente := http.Client{}
-
-	resp, err := cliente.Do(req)
-	if err != nil {
-		return c.String(http.StatusBadRequest, err.Error())
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return c.String(http.StatusBadRequest, err.Error())
-	}
-
-	dataResponse := responses{}
-	err = json.NewDecoder(bytes.NewReader(body)).Decode(&dataResponse)
-	if err != nil {
-		return c.String(http.StatusInternalServerError, err.Error())
-	}
-
-	dataChart := createDataChart(dataResponse[0])
-	chart := createChart(dataChart)
-
-	// c.JSON(http.StatusOK, z)
-	c.HTML(http.StatusOK, chart)
-	return nil
-}
-
-type responses []response
-
-type response struct {
-	Currency   string      `json:"currency"`
-	Timestamps []time.Time `json:"timestamps"`
-	Prices     []string    `json:"prices"`
-}
-
-func createDataChart(resp response) string {
-	dataChartHeaders := "['Fecha', '" + resp.Currency + "'],"
-	var dataChart string
-
-	for i, time := range resp.Timestamps {
-		dataChart += "['" + time.Format("2006-01-02") + "', " + resp.Prices[i] + "],"
-	}
-	dataChart = strings.TrimSuffix(dataChart, ",")
-
-	dataC := strings.Join([]string{dataChartHeaders, dataChart}, "")
-
-	log.Printf("%v", dataC)
-
-	return dataC
-}
-
-func createChart(dataChart string) string {
-	htmlChart := `<html>
-	<head>
-		<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-		<script type="text/javascript">
-			google.charts.load('current', {'packages':['imagelinechart']});
-			google.charts.setOnLoadCallback(drawChart);
-
-			function drawChart() {
-				var data = google.visualization.arrayToDataTable([` + dataChart + `]);
-
-				var options = {
-					title: 'Valor de la criptomoneda(USD)',
-					min: 0,
-					width: 1000,
-					height: 500,
-					legend: 'none',
-					backgroundColor : '#f2f2f2',
-					colors : ['#1092EF']
-				};
-
-				var chart = new google.visualization.ImageLineChart(document.getElementById('line_chart'));
-
-				chart.draw(data, options);
-			}
-		</script>
-	</head>
-	<body>
-		<div id="line_chart" style="width: 1000px; height: 600px"></div>
-	</body>
-	</html>
-	`
-	return htmlChart
+	e.Start(":" + port)
 }
